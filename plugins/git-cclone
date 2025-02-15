@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import urllib.parse
+import subprocess
+import shutil
+
+
+def parse_git_clone_url(url: str):
+    username = ""
+    scheme, netloc, path, params, query, fragment = urllib.parse.urlparse(
+        url, allow_fragments=True,
+    )
+    if 'http' not in scheme:
+        if 'ssh' in scheme:
+            if '@' in netloc:
+                username, rest = netloc.split('@')
+                if ':' in rest:
+                    host, rest = rest.split(':')
+                    netloc = f"{username}@{host}"
+                    path = rest+path
+        else:
+            if '@' in path:
+                username, rest = path.split('@')
+                if ':' in rest:
+                    host, rest = rest.split(':')
+                    netloc = f"{username}@{host}"
+                    path = rest
+                    scheme = 'ssh'
+
+    path = path.lstrip('/')
+    username, repo = path.split('/')
+    repo = repo.rstrip('.git')
+
+    return scheme, netloc, username, repo
+
+
+if __name__ == '__main__':
+    worktree = False
+    force = False
+    scheme, netloc, username, repo = None, None, None, None
+    clone_url = None
+    options = []
+    for arg in sys.argv[1:]:
+        if arg == "--worktree":
+            worktree = True
+        elif arg == "--force":
+            force = True
+        elif arg.startswith("--"):
+            options.append(arg)
+        elif arg in ["cclone"]:
+            continue
+        else:
+            scheme, netloc, username, repo = parse_git_clone_url(arg)
+            clone_url = urllib.parse.urlunsplit(
+                (scheme, netloc, f"{username}/{repo}", "", "")
+            )
+
+    base_path = os.getcwd()
+    clone_dir = repo
+
+    if worktree:
+        options.append('--bare')
+        base_path = os.path.join(os.getcwd(), repo)
+        clone_dir = ".repo"
+
+    os.makedirs(base_path, 0o755, exist_ok=True)
+
+    clone_path = os.path.join(base_path, clone_dir)
+
+    if force:
+        shutil.rmtree(clone_path)
+
+    try:
+        subprocess.run(f"git clone {' '.join(options)} {clone_url} {clone_path}".split(), check=True)
+        if worktree:
+            with open(os.path.join(base_path, '.git'), "w") as f:
+                f.write("gitdir: .repo\n")
+            os.chdir(base_path)
+            subprocess.run("git remote remove origin".split(), check=True)
+            subprocess.run(f"git remote add origin {clone_url}".split(), check=True)
+    except:
+        if worktree:
+            shutil.rmtree(base_path)
