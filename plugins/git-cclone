@@ -73,13 +73,18 @@ if __name__ == '__main__':
         shutil.rmtree(clone_path)
 
     try:
-        subprocess.run(f"git clone {' '.join(options)} {clone_url} {clone_path}".split(), check=True)
+        subprocess.run(
+            f"git clone {' '.join(options)} {clone_url} {clone_path}".split(),
+            check=True,
+        )
         if worktree:
             with open(os.path.join(base_path, '.git'), "w") as f:
                 f.write("gitdir: .repo\n")
             os.chdir(base_path)
             subprocess.run("git remote remove origin".split(), check=True)
-            subprocess.run(f"git remote add origin {clone_url}".split(), check=True)
-    except:
+            subprocess.run(f"git remote add origin {
+                           clone_url}".split(), check=True)
+    except Exception as e:
+        print(e)
         if worktree:
             shutil.rmtree(base_path)
